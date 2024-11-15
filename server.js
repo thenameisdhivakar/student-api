@@ -1,70 +1,83 @@
-import express from 'express';
-import mongoose from 'mongoose';
+import express, { json } from 'express';
+import { Schema, model, connect } from 'mongoose';
 import cors from 'cors';
 
 const app = express();
+const PORT = 5000; 
+const MONGO_URI = process.env.MONGO_URI; 
+
 app.use(cors());
-app.use(express.json());
+app.use(json());
 
-const mongoDBURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/student-db';
-console.log('db connection: ', mongoDBURI);
 
-mongoose.connect(mongoDBURI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+const feedbackSchema = new Schema({
+  name: { type: String, required: true },
+  mail: { type: String, required: true },
+  feedback: { type: String, required: true },
 });
 
-const userSchema = new mongoose.Schema({
-    name: String,
-    mail: String,
-    feedback: String,
-});
+const Feedback = model('Feedback', feedbackSchema);
 
-const userModel = mongoose.model('users', userSchema);
 
-app.post('/students', (req, res) => {
-    const formstudents = new userModel(req.body);
-    formstudents.save()
-        .then((students) => res.json(students))
-        .catch(() => res.status(500).send('data error'))
-});
+connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('Failed to connect to MongoDB:', err));
 
-app.get('/students', (req, res) => {
-    userModel.find()
-        .then((data) => res.json(data))
-        .catch(() => res.status(500).send('error'))
-})
-
-app.delete('/students/:id', (req, res) => {
-    const { id } = req.params;
-
-    userModel.findByIdAndDelete(id)
-        .then((deletedData) => {
-            if (deletedData) {
-                res.json({ message: 'Data successfully deleted', deletedData });
-            } else {
-                res.status(404).json({ message: 'Data not found' });
-            }
-        })
-        .catch(() => res.status(500).send('Error deleting data'));
-});
-
-app.put('/students/:id', (req, res) => {
-    const { id } = req.params;
-    const updatedData = req.body;
-
-    userModel.findByIdAndUpdate(id, updatedData, { new: true })
-        .then((data) => {
-            if (data) {
-                res.json({ message: 'Data successfully updated', data });
-            } else {
-                res.status(404).json({ message: 'Data not found' });
-            }
-        })
-        .catch(() => res.status(500).send('Error updating data'));
+app.get('/students', async (req, res) => {
+  try {
+    const feedbacks = await Feedback.find();
+    res.json(feedbacks);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching feedbacks' });
+  }
 });
 
 
+app.post('/students', async (req, res) => {
+  const { name, mail, feedback } = req.body;
+  try {
+    const newFeedback = new Feedback({ name, mail, feedback });
+    await newFeedback.save();
+    res.status(201).json(newFeedback);
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating feedback' });
+  }
+});
 
-const PORT = 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.put('/students/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, mail, feedback } = req.body;
+  try {
+    const updatedFeedback = await Feedback.findByIdAndUpdate(
+      id,
+      { name, mail, feedback },
+      { new: true }
+    );
+    if (!updatedFeedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+    res.json(updatedFeedback);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating feedback' });
+  }
+});
+
+
+app.delete('/students/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const deletedFeedback = await Feedback.findByIdAndDelete(id);
+    if (!deletedFeedback) {
+      return res.status(404).json({ message: 'Feedback not found' });
+    }
+    res.json({ message: 'Feedback deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting feedback' });
+  }
+});
+
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
